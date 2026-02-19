@@ -9,7 +9,7 @@ llm = ChatOpenAI(model = settings.llm_model, openai_api_key = settings.openai_ap
 
 class GuideState(TypedDict, total = False):
     session_id: str
-    guide_id: str
+    file_id: str
     user_text: str
 
     inferred_position: Optional[str]
@@ -25,7 +25,7 @@ def build_graph(index: RAGIndex):
     g = StateGraph(GuideState)
 
     async def retrieve_node(state: GuideState) -> GuideState:
-        results = await index.retrieve(state["guide_id"], state["user_text"], k = 7)
+        results = await index.retrieve(state["file_id"], state["user_text"], k = 7)
         retrieved = []
         for chunk, score in results:
             retrieved.append({
@@ -102,7 +102,7 @@ QUESTION: <optional, only if you need clarification from the user, otherwise lea
 
             for line in rest.splitlines():
                 line = line.strip()
-                if line[: 2].isdigit() (len(line) > 2 and line[0].isdigit() and line[1] in [".", ")"]):
+                if line[: 2].isdigit() or (len(line) > 2 and line[0].isdigit() and line[1] in [".", ")"]):
                     next_steps.append(line.split(maxsplit = 1)[1] if " " in line else line)
 
         return {"answer": answer, "next_steps": next_steps}

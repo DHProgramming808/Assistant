@@ -27,6 +27,12 @@ async def fetch_url_text(url: str) -> str:
 
     async with httpx.AsyncClient(timeout = 30.0, follow_redirects = True, headers = headers) as client:
         r = await client.get(url)
+
+        print("DEBUG STATUS:", r.status_code)
+        print("DEBUG FINAL URL:", str(r.url))
+        print("DEBUG SERVER HEADER:", r.headers.get("server"))
+        print("DEBUG CONTENT TYPE:", r.headers.get("content-type"))
+
         r.raise_for_status()
         return extract_text_from_html(r.text)
     

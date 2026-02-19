@@ -8,7 +8,7 @@ class IngestRequest(BaseModel):
 
 class AskRequest(BaseModel):
     session_id: str
-    guide_id: str
+    file_id: str
     user_text: str
 
 class RetrievedChunk(BaseModel):
@@ -19,9 +19,14 @@ class RetrievedChunk(BaseModel):
 
 class AskResponse(BaseModel):
     session_id: str
-    guide_id: str
+    file_id: str
     answer: str
     inferred_position: Optional[str] = None
     next_steps: Optional[List[str]] = None
     citations: List[RetrievedChunk] = []
     state: Dict[str, Any] = {}
+
+class ManualIngestRequest(BaseModel):
+    file_id: str
+    text: str
+    source_url: Optional[str] = None
