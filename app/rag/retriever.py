@@ -13,31 +13,31 @@ class RAGIndex:
 
     async def _ensure_store(self):
         if self._store is None:
-            v = await self._emb.embed_query("dmiension probe")
+            v = self._emb.embed_query("dimension probe")
             self._store = FaissStore(dim = len(v))
 
-    async def ingest(self, guide_id: str, source_url: str, chunks: List[str]) -> int:
+    async def ingest(self, file_id: str, source_url: str, chunks: List[str]) -> int:
         await self._ensure_store()
         assert self._store is not None
 
-        vectors = await self._emb.embed_documents(chunks)
+        vectors = self._emb.embed_documents(chunks)
         doc_chunks = [
             DocChunk(
-                chunk_id = f"{guide_id}:{i}",
+                chunk_id = f"{file_id}:{i}",
                 text = chunks[i],
                 source = source_url,
-                guide_id = guide_id
+                file_id = file_id
             )
             for i in range(len(chunks))
         ]
 
-        self._store.upsert(guide_id, vectors, doc_chunks)
+        self._store.upsert(file_id, vectors, doc_chunks)
         return len(chunks)
     
-    async def retrieve(self, guide_id: str, query: str, k: int = 6) -> list[tuple[DocChunk, float]]:
+    async def retrieve(self, file_id: str, query: str, k: int = 6) -> list[tuple[DocChunk, float]]:
         await self._ensure_store()
         assert self._store is not None
 
-        query_vec = await self._emb.embed_query(query)
-        results = self._store.search(guide_id, query_vec, k = k)
+        query_vec = self._emb.embed_query(query)
+        results = self._store.search(file_id, query_vec, k = k)
         return results

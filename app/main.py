@@ -1,6 +1,6 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from app.core.config import settings
-from app.rag.schemas import IngestRequest, AskRequest, AskResponse, RetrievedChunk
+from app.rag.schemas import IngestRequest, AskRequest, AskResponse, RetrievedChunk, ManualIngestRequest
 from app.rag.ingest import fetch_url_text, chunk_text
 from app.rag.retriever import RAGIndex
 from app.rag.graph import build_graph
@@ -25,7 +25,16 @@ async def ingest(request: IngestRequest):
     text = await fetch_url_text(request.file_url)
     chunks = chunk_text(text, settings.chunk_size, settings.chunk_overlap)
     count = await index.ingest(request.file_id, request.file_url, chunks)
-    return {"file_id": request.file_id, "url": request.file_url, "ingested_chunks": count}
+    return {"file_id": request.file_id, "source_url": request.file_url, "ingested_chunks": count}
+
+@app.post("/rag/ingest_text")
+async def manual_ingest(request: ManualIngestRequest):
+    if not settings.openai_api_key:
+        raise HTTPException(status_code = 500, detail = "OpenAI API key not configured")
+    
+    chunks = chunk_text(request.text, settings.chunk_size, settings.chunk_overlap)
+    count = await index.ingest(request.file_id, request.source_url or "manual_input", chunks)
+    return {"file_id": request.file_id, "source_url": request.source_url, "ingested_chunks": count}
 
 @app.post("/rag/ask", response_model = AskResponse)
 async def rag_ask(request: AskRequest):
@@ -35,12 +44,12 @@ async def rag_ask(request: AskRequest):
     memory = SESSION_STATE.setdefault(request.session_id, {})
     state_iniital = {
         "session_id": request.session_id,
-        "guide_id": request.guide_id,
+        "file_id": request.file_id,
         "user_text": request.user_text,
         **memory,
     }
 
-    out = graph.ainvoke(state_iniital)
+    out = await graph.ainvoke(state_iniital)
 
     SESSION_STATE[request.session_id] = {
         "inferred_position": out.get("inferred_position"),
@@ -59,7 +68,7 @@ async def rag_ask(request: AskRequest):
 
     return AskResponse(
         session_id = request.session_id,
-        guide_id = request.guide_id,
+        file_id = request.file_id,
         answer = out.get("answer", ""),
         inferred_position = out.get("inferred_position"),
         next_steps = out.get("next_steps", []),
@@ -75,16 +84,16 @@ async def websocket_endpoint(websocket: WebSocket):
             payload = await websocket.receive_json()
             print("Received payload:", payload)
             session_id = payload.get("session_id", "default")
-            guide_id = payload.get("guide_id", "")
+            file_id = payload.get("file_id", "")
             user_text = payload.get("user_text", "")
 
-            if not guide_id or not user_text:
-                await websocket.send_json({"type": "error", "message": "guide_id and user_text are required"})
+            if not file_id or not user_text:
+                await websocket.send_json({"type": "error", "message": "file_id and user_text are required"})
                 continue
 
             await websocket.send_json({"type": "status", "message": "thinking..."})
             
-            response = await rag_ask(AskRequest(session_id = session_id, guide_id = guide_id, user_text = user_text))
+            response = await rag_ask(AskRequest(session_id = session_id, file_id = file_id, user_text = user_text))
 
             await websocket.send_json({"type": "position", "value": response.inferred_position})
             await websocket.send_json({"type": "answer", "value": response.answer})
